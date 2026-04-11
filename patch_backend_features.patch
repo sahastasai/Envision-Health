@@ -1,0 +1,52 @@
+--- src/index.ts
++++ src/index.ts
+@@ -227,6 +227,51 @@
+   return c.json(decryptedResults)
+ })
+ 
++app.put('/api/protected/patients/:id/medicalData', async (c) => {
++  const id = c.req.param('id')
++  const { type, payload } = await c.req.json() // type: 'prescription' or 'lab'
++  
++  const patient: any = await c.env.DB.prepare('SELECT encrypted_medical_history FROM Patients WHERE id = ?').bind(id).first()
++  if (!patient) return c.json({ error: 'Not found' }, 404)
++
++  let medData: any = {}
++  if (patient.encrypted_medical_history) {
++    const decryptedStr = await decryptData(patient.encrypted_medical_history, c.env.AES_SECRET)
++    try { medData = JSON.parse(decryptedStr) } catch (e) { }
++  }
++
++  if (type === 'prescription') {
++    if (!medData.prescriptions) medData.prescriptions = []
++    medData.prescriptions.push({ ...payload, date: new Date().toISOString() })
++  } else if (type === 'lab') {
++    if (!medData.labs) medData.labs = []
++    medData.labs.push({ ...payload, date: new Date().toISOString() })
++  }
++
++  const encryptedHistory = await encryptData(JSON.stringify(medData), c.env.AES_SECRET)
++  await c.env.DB.prepare('UPDATE Patients SET encrypted_medical_history = ? WHERE id = ?').bind(encryptedHistory, id).run()
++
++  return c.json({ message: 'Updated successfully' })
++})
++
++// Inventory Routes
++app.get('/api/protected/inventory', async (c) => {
++  const { results } = await c.env.DB.prepare('SELECT * FROM Inventory ORDER BY expiration_date ASC').all()
++  return c.json(results)
++})
++
++app.post('/api/protected/inventory', async (c) => {
++  const { itemName, category, quantity, expirationDate } = await c.req.json()
++  const id = uuidv4()
++  
++  await c.env.DB.prepare(
++    'INSERT INTO Inventory (id, item_name, category, quantity, expiration_date) VALUES (?, ?, ?, ?, ?)'
++  ).bind(id, itemName, category, quantity, expirationDate).run()
++  
++  return c.json({ message: 'Item added successfully', id })
++})
++
+ // Grants & Scraper AI Matcher
+ app.post('/api/protected/grants/seed', async (c) => {

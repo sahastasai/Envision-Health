@@ -1,0 +1,134 @@
+--- apps/frontend/src/App.tsx
++++ apps/frontend/src/App.tsx
+@@ -558,26 +558,34 @@
+ 
+ const VolunteerCRM = ({ token, logout }: { token: string, logout: () => void }) => {
+-  const [activeTab, setActiveTab] = useState('events')
++  const [activeTab, setActiveTab] = useState('dashboard')
+   const [events, setEvents] = useState<any[]>([])
+   const [volunteers, setVolunteers] = useState<any[]>([])
+   const [pendingHours, setPendingHours] = useState<any[]>([])
+   const [showEventForm, setShowEventForm] = useState(false)
+   const [eventForm, setEventForm] = useState({ title: '', description: '', date: '', location: '', requiredVolunteers: 1 })
++  
++  const [stats, setStats] = useState<any>(null)
++  const [selectedEvent, setSelectedEvent] = useState<any>(null)
++  const [eventParticipants, setEventParticipants] = useState<any[]>([])
+ 
+   const [flierData, setFlierData] = useState({ eventDetails: '', tone: 'Professional & Urgency' })
+   const [flierResult, setFlierResult] = useState<any>(null)
+   const [flierLoading, setFlierLoading] = useState(false)
+ 
+   const fetchData = async () => {
+     try {
+-      const [eventsRes, volRes, hoursRes] = await Promise.all([
++      const [eventsRes, volRes, hoursRes, statsRes] = await Promise.all([
+         fetch(API_URL + '/api/protected/vms/events', { headers: { 'Authorization': `Bearer ${token}` } }),
+         fetch(API_URL + '/api/protected/vms/volunteers', { headers: { 'Authorization': `Bearer ${token}` } }),
+-        fetch(API_URL + '/api/protected/vms/hours/pending', { headers: { 'Authorization': `Bearer ${token}` } })
++        fetch(API_URL + '/api/protected/vms/hours/pending', { headers: { 'Authorization': `Bearer ${token}` } }),
++        fetch(API_URL + '/api/protected/vms/stats', { headers: { 'Authorization': `Bearer ${token}` } })
+       ])
+       
+       if (eventsRes.status === 401) return logout()
+       
+       setEvents(await eventsRes.json())
+       setVolunteers(await volRes.json())
+       setPendingHours(await hoursRes.json())
++      setStats(await statsRes.json())
+     } catch(e) { console.error(e) }
+   }
+ 
+@@ -628,60 +636,128 @@
+   }
++  
++  const fetchParticipants = async (eventId: string) => {
++    const res = await fetch(API_URL + `/api/protected/vms/events/${eventId}/participants`, { headers: { 'Authorization': `Bearer ${token}` } })
++    setEventParticipants(await res.json())
++  }
++  
++  const handleManageEvent = (e: any) => {
++    setSelectedEvent(e)
++    fetchParticipants(e.id)
++  }
++
++  const handleUpdateAttendance = async (eventId: string, userId: string, status: string, hours: number = 0) => {
++    await fetch(API_URL + `/api/protected/vms/events/${eventId}/attendance/${userId}`, {
++      method: 'PUT',
++      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
++      body: JSON.stringify({ status, hours })
++    })
++    fetchParticipants(eventId)
++    fetchData()
++  }
+ 
+   return (
+     <>
+       <div className="flex justify-between items-end mb-6">
+         <div>
+           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Volunteer CRM</h1>
+-          <p className="text-gray-500 mt-1">Manage events, recruit staff, and track hours.</p>
++          <p className="text-gray-500 mt-1">Engage volunteers, manage attendance, and track participation.</p>
+         </div>
+         <div className="flex bg-gray-100 p-1 rounded-lg">
++          <button onClick={() => {setActiveTab('dashboard'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'dashboard' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Dashboard</button>
+           <button onClick={() => setActiveTab('events')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'events' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Events</button>
+           <button onClick={() => setActiveTab('directory')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'directory' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Directory</button>
+           <button onClick={() => setActiveTab('hours')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'hours' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+             Pending Hours {pendingHours.length > 0 && <span className="ml-2 bg-indigo-600 text-white px-2 py-0.5 rounded-full text-xs">{pendingHours.length}</span>}
+           </button>
+           <button onClick={() => setActiveTab('marketing')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'marketing' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Marketing</button>
+         </div>
+       </div>
+       
++      {activeTab === 'dashboard' && stats && (
++        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
++          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
++            <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
++              <div className="bg-indigo-50 p-3 rounded-xl"><Users className="text-indigo-600 h-6 w-6"/></div>
++              <div>
++                <p className="text-sm font-medium text-gray-500">Total Volunteers</p>
++                <h3 className="text-2xl font-bold text-gray-900">{stats.total_volunteers}</h3>
++              </div>
++            </div>
++            <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
++              <div className="bg-blue-50 p-3 rounded-xl"><Calendar className="text-blue-600 h-6 w-6"/></div>
++              <div>
++                <p className="text-sm font-medium text-gray-500">Active Events</p>
++                <h3 className="text-2xl font-bold text-gray-900">{stats.active_events}</h3>
++              </div>
++            </div>
++            <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
++              <div className="bg-emerald-50 p-3 rounded-xl"><CheckCircle2 className="text-emerald-600 h-6 w-6"/></div>
++              <div>
++                <p className="text-sm font-medium text-gray-500">Completion Rate</p>
++                <h3 className="text-2xl font-bold text-gray-900">{stats.completion_rate}%</h3>
++              </div>
++            </div>
++            <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
++              <div className="bg-rose-50 p-3 rounded-xl"><AlertTriangle className="text-rose-600 h-6 w-6"/></div>
++              <div>
++                <p className="text-sm font-medium text-gray-500">No-Show Rate</p>
++                <h3 className="text-2xl font-bold text-gray-900">{stats.no_show_rate}%</h3>
++              </div>
++            </div>
++          </div>
++          
++          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mt-8">
++            <h2 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h2>
++            <div className="text-gray-500 text-sm">Dashboard insights and metrics updating in real-time. Use the tabs above to manage specific records.</div>
++          </div>
++        </div>
++      )}
++
+       {activeTab === 'events' && (
+         <div className="space-y-6">
+-          <div className="flex justify-end">
++          {!selectedEvent && <div className="flex justify-end">
+             <button onClick={() => setShowEventForm(!showEventForm)} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm hover:bg-indigo-700 transition-colors">
+               {showEventForm ? 'Cancel' : <><Plus size={18} /> Create Event</>}
+             </button>
+-          </div>
++          </div>}
+           
+           {showEventForm && !selectedEvent && (
