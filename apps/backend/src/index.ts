@@ -160,9 +160,11 @@ app.post('/api/protected/vms/fliers/generate', async (c) => {
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Tone: ${tone}. Event details: ${eventDetails}` }
-      ]
+      ],
+      max_tokens: 512
     })
-    return c.json({ flierCopy: response.response })
+    const result = response.result?.response || response.response || ''
+    return c.json({ flierCopy: result })
   } catch (error: any) {
     return c.json({ error: error.message || 'AI generation failed' }, 500)
   }
@@ -306,26 +308,45 @@ app.post('/api/protected/grants/match', async (c) => {
   const { results: grants } = await c.env.DB.prepare('SELECT title, agency, requirements_text, url as amount FROM Grants').all()
   
   const grantsContext = JSON.stringify(grants)
-  const systemPrompt = `You are an expert AI grant matching assistant. Analyze the clinic metrics provided and match them against the following available grants:\n\n${grantsContext}\n\nReturn ONLY a JSON array of the top 3 best matching grants with the structure: [{"title": "grant title", "agency": "agency name", "match_score": 95, "reason": "brief explanation why it matches"}]. Do NOT include markdown formatting like \`\`\`json.`
+  const systemPrompt = `You are an expert AI grant matching assistant. Analyze the clinic metrics provided and match them against the following available grants:\n\n${grantsContext}\n\nReturn ONLY a valid JSON array (no markdown, no code blocks) of the top 3 best matching grants with this exact structure: [{"title": "grant title", "agency": "agency name", "match_score": 95, "reason": "brief explanation"}]`
   
   try {
     const response = await c.env.AI.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Clinic metrics: ${metrics}` }
-      ]
+      ],
+      max_tokens: 1024
     })
     
-    // Parse the raw JSON string out of Llama's response
-    let jsonMatch = response.response
-    try {
-      jsonMatch = jsonMatch.replace(/```json/g, '').replace(/```/g, '').trim()
-      const parsedMatches = JSON.parse(jsonMatch)
-      return c.json({ matches: parsedMatches })
-    } catch(e) {
-      // Fallback if AI didn't format perfectly
-      return c.json({ matches: [{ title: "AI format error", reason: response.response, match_score: 0 }]})
+    // Extract response text from various possible formats
+    let responseText = response.result?.response || response.response || JSON.stringify(response)
+    
+    // Clean up markdown formatting
+    responseText = responseText
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .replace(/^[\s\n]*/, '')
+      .replace(/[\s\n]*$/, '')
+      .trim()
+    
+    // Try to extract JSON array if it's wrapped in text
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/)
+    if (jsonMatch) {
+      responseText = jsonMatch[0]
     }
+    
+    try {
+      const parsedMatches = JSON.parse(responseText)
+      if (Array.isArray(parsedMatches) && parsedMatches.length > 0) {
+        return c.json({ matches: parsedMatches })
+      }
+    } catch(parseErr) {
+      console.error('JSON parse error:', parseErr, 'Text was:', responseText)
+    }
+    
+    // Fallback if parsing failed
+    return c.json({ matches: [{ title: "Grant matching unavailable", agency: "System", match_score: 0, reason: "AI service returned invalid format. Raw: " + responseText.substring(0, 100) }]})
   } catch (error: any) {
     return c.json({ error: error.message || 'AI generation failed' }, 500)
   }
@@ -342,9 +363,11 @@ app.post('/api/protected/grants/generate', async (c) => {
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
-      ]
+      ],
+      max_tokens: 1024
     })
-    return c.json({ proposal: response.response })
+    const result = response.result?.response || response.response || ''
+    return c.json({ proposal: result })
   } catch (error: any) {
     return c.json({ error: error.message || 'AI generation failed' }, 500)
   }
