@@ -135,14 +135,94 @@ const AuthPage = ({ setToken, setRole }: { setToken: (t: string) => void, setRol
 }
 
 const NavLink = ({ to, icon: Icon, children }: { to: string, icon: any, children: React.ReactNode }) => {
-  const location = useLocation()
-  const isActive = location.pathname === to
-  return (
-    <Link to={to} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-indigo-600/10 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-      <Icon className={`h-5 w-5 ${isActive ? 'text-indigo-600' : 'text-gray-400'}`} />
-      {children}
-    </Link>
-  )
+   const location = useLocation()
+   const isActive = location.pathname === to
+   return (
+     <Link to={to} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-indigo-600/10 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+       <Icon className={`h-5 w-5 ${isActive ? 'text-indigo-600' : 'text-gray-400'}`} />
+       {children}
+     </Link>
+   )
+}
+
+const SearchHeader = ({ token, role }: { token: string, role: string }) => {
+   const [query, setQuery] = useState('')
+   const [results, setResults] = useState<any>(null)
+   const [open, setOpen] = useState(false)
+
+   const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+     const value = e.target.value
+     setQuery(value)
+     
+     if (value.length < 2) {
+       setResults(null)
+       return
+     }
+
+     try {
+       const res = await fetch(`${API_URL}/api/protected/search?q=${encodeURIComponent(value)}`, {
+         headers: { 'Authorization': `Bearer ${token}` }
+       })
+       const data = await res.json()
+       setResults(data)
+       setOpen(true)
+     } catch (err) {
+       console.error('Search error:', err)
+     }
+   }
+
+   return (
+     <div className="relative w-96">
+       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+       <input
+         type="text"
+         value={query}
+         onChange={handleSearch}
+         onFocus={() => query && setOpen(true)}
+         onBlur={() => setTimeout(() => setOpen(false), 200)}
+         placeholder={
+           role === 'Doctor' || role === 'Admin'
+             ? 'Search patients, volunteers, events...'
+             : 'Search events or opportunities...'
+         }
+         className="w-full pl-10 pr-4 py-2 bg-gray-50 border-transparent rounded-lg text-sm focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+       />
+       {open && results && (
+         <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-y-auto">
+           {results.patients && results.patients.length > 0 && (
+             <div className="p-2 border-b border-gray-100">
+               <p className="text-xs font-semibold text-gray-500 px-2 py-1">Patients</p>
+               {results.patients.map((p: any) => (
+                 <div key={p.id} className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm">
+                   {p.first_name} {p.last_name}
+                 </div>
+               ))}
+             </div>
+           )}
+           {results.volunteers && results.volunteers.length > 0 && (
+             <div className="p-2 border-b border-gray-100">
+               <p className="text-xs font-semibold text-gray-500 px-2 py-1">Volunteers</p>
+               {results.volunteers.map((v: any) => (
+                 <div key={v.id} className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm">
+                   {v.email} - {v.total_hours}h
+                 </div>
+               ))}
+             </div>
+           )}
+           {results.events && results.events.length > 0 && (
+             <div className="p-2">
+               <p className="text-xs font-semibold text-gray-500 px-2 py-1">Events</p>
+               {results.events.map((e: any) => (
+                 <div key={e.id} className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm">
+                   {e.title}
+                 </div>
+               ))}
+             </div>
+           )}
+         </div>
+       )}
+     </div>
+   )
 }
 
 const Layout = ({ children, logout, role }: { children: React.ReactNode, logout: () => void, role: string }) => (
@@ -215,21 +295,18 @@ const Layout = ({ children, logout, role }: { children: React.ReactNode, logout:
 
     {/* Main Content */}
     <div className="flex-1 flex flex-col overflow-hidden relative">
-      {/* Top Header */}
-      <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-20">
-        <div className="flex items-center gap-4 flex-1">
-          <div className="relative w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input type="text" placeholder="Search patients, grants, or shifts..." className="w-full pl-10 pr-4 py-2 bg-gray-50 border-transparent rounded-lg text-sm focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all" />
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
-            <Bell size={20} />
-            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 border border-white"></span>
-          </button>
-        </div>
-      </header>
+       {/* Top Header */}
+       <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-20">
+         <div className="flex items-center gap-4 flex-1">
+           <SearchHeader token={localStorage.getItem('token') || ''} role={role} />
+         </div>
+         <div className="flex items-center gap-4">
+           <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors" title="View notifications">
+             <Bell size={20} />
+             <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 border border-white"></span>
+           </button>
+         </div>
+       </header>
       
       {/* Scrollable Content */}
       <main className="flex-1 overflow-auto p-8 relative">
@@ -426,16 +503,18 @@ const VolunteerPortal = ({ token, logout }: { token: string, logout: () => void 
     )
   }
 
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <div className="flex justify-between items-end mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{isOpportunities ? 'All Opportunities' : 'Volunteer Dashboard'}</h1>
-          <p className="text-gray-500 mt-1">{isOpportunities ? 'Browse and sign up for upcoming clinical and community events.' : 'Track your hours and upcoming shifts.'}</p>
-        </div>
-      </div>
-      
-      {!isOpportunities && profile && (
+   return (
+     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+       <div className="flex justify-between items-end mb-6">
+         <div>
+           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{isOpportunities ? 'All Opportunities' : 'Volunteer Dashboard'}</h1>
+           <p className="text-gray-500 mt-1">{isOpportunities ? 'Browse and sign up for upcoming clinical and community events.' : 'Track your hours and upcoming shifts.'}</p>
+         </div>
+       </div>
+
+       {!isOpportunities && <VolunteerApplication token={token} />}
+       
+       {!isOpportunities && profile && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-indigo-100 flex items-center gap-4 col-span-1">
@@ -1049,10 +1128,11 @@ const Patients = ({ token, logout }: { token: string, logout: () => void }) => {
           </div>
           
           <div className="flex gap-2 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm w-max">
-            <button onClick={() => navigate(`/patients?id=${selectedPatient.id}&tab=demographics`)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${tabParam === 'demographics' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>Chart & Demographics</button>
-            <button onClick={() => navigate(`/patients?id=${selectedPatient.id}&tab=prescriptions`)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${tabParam === 'prescriptions' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}><FileText size={16}/> Prescriptions</button>
-            <button onClick={() => navigate(`/patients?id=${selectedPatient.id}&tab=labs`)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${tabParam === 'labs' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}><Activity size={16}/> Lab Results</button>
-          </div>
+             <button onClick={() => navigate(`/patients?id=${selectedPatient.id}&tab=demographics`)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${tabParam === 'demographics' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>Chart & Demographics</button>
+             <button onClick={() => navigate(`/patients?id=${selectedPatient.id}&tab=prescriptions`)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${tabParam === 'prescriptions' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}><FileText size={16}/> Prescriptions</button>
+             <button onClick={() => navigate(`/patients?id=${selectedPatient.id}&tab=labs`)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${tabParam === 'labs' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}><Activity size={16}/> Lab Results</button>
+             <button onClick={() => navigate(`/patients?id=${selectedPatient.id}&tab=consent`)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${tabParam === 'consent' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}><ShieldAlert size={16}/> Consent</button>
+           </div>
           
           {tabParam === 'demographics' && (
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
@@ -1080,8 +1160,18 @@ ${parsed.history || 'No notes'}`
           )}
           
           {tabParam === 'labs' && (
-            <PatientLabs patientId={selectedPatient.id} token={token} patientHistory={selectedPatient.medical_history} onUpdate={fetchPatients} />
-          )}
+             <PatientLabs patientId={selectedPatient.id} token={token} patientHistory={selectedPatient.medical_history} onUpdate={fetchPatients} />
+           )}
+           
+           {tabParam === 'consent' && (
+             <div className="space-y-4">
+               <ConsentForm patientId={selectedPatient.id} token={token} />
+               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                 <h3 className="font-bold text-gray-900 mb-4">Consent Status</h3>
+                 <p className="text-sm text-gray-600">Patient must provide explicit consent for all PHI access in accordance with HIPAA regulations.</p>
+               </div>
+             </div>
+           )}
         </div>
       )}
     </>
@@ -1304,15 +1394,16 @@ const VolunteerCRM = ({ token, logout }: { token: string, logout: () => void }) 
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Volunteer CRM</h1>
           <p className="text-gray-500 mt-1">Engage volunteers, manage attendance, and track participation.</p>
         </div>
-        <div className="flex bg-gray-100 p-1 rounded-lg">
-          <button onClick={() => {setActiveTab('dashboard'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'dashboard' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Dashboard</button>
-          <button onClick={() => {setActiveTab('events'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'events' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Events</button>
-          <button onClick={() => {setActiveTab('directory'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'directory' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Directory</button>
-          <button onClick={() => {setActiveTab('hours'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'hours' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
-            Pending Hours {pendingHours.length > 0 && <span className="ml-2 bg-indigo-600 text-white px-2 py-0.5 rounded-full text-xs">{pendingHours.length}</span>}
-          </button>
-          <button onClick={() => {setActiveTab('marketing'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'marketing' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Marketing</button>
-        </div>
+       <div className="flex bg-gray-100 p-1 rounded-lg">
+           <button onClick={() => {setActiveTab('dashboard'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'dashboard' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Dashboard</button>
+           <button onClick={() => {setActiveTab('events'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'events' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Events</button>
+           <button onClick={() => {setActiveTab('applications'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'applications' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Applications</button>
+           <button onClick={() => {setActiveTab('directory'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'directory' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Directory</button>
+           <button onClick={() => {setActiveTab('hours'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'hours' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+             Pending Hours {pendingHours.length > 0 && <span className="ml-2 bg-indigo-600 text-white px-2 py-0.5 rounded-full text-xs">{pendingHours.length}</span>}
+           </button>
+           <button onClick={() => {setActiveTab('marketing'); setSelectedEvent(null)}} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'marketing' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Marketing</button>
+         </div>
       </div>
       
       {activeTab === 'dashboard' && stats && (
@@ -1618,9 +1709,13 @@ const VolunteerCRM = ({ token, logout }: { token: string, logout: () => void }) 
             </tbody>
           </table>
         </div>
-      )}
+       )}
 
-      {activeTab === 'marketing' && (
+       {activeTab === 'applications' && (
+         <VolunteerApplicationsDashboard token={token} logout={logout} />
+       )}
+
+       {activeTab === 'marketing' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Sparkles className="text-indigo-500"/> AI Flier Generator</h2>
@@ -1779,6 +1874,340 @@ const AIWriter = ({ token, logout }: { token: string, logout: () => void }) => {
         </div>
       </div>
     </>
+  )
+}
+
+// Consent Management Component
+const ConsentForm = ({ patientId, token }: { patientId: string, token: string }) => {
+  const [status, setStatus] = useState<string>('')
+  const [loading, setLoading] = useState(false)
+
+  const handleConsent = async (consentType: string) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/api/protected/patients/${patientId}/consent`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consentType })
+      })
+      if (res.ok) {
+        setStatus('Consent recorded successfully')
+      }
+    } catch (err) {
+      setStatus('Error recording consent')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <h3 className="font-semibold text-blue-900 mb-2">Privacy & Consent</h3>
+      <p className="text-sm text-blue-800 mb-4">Please approve access to your medical records for HIPAA compliance.</p>
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleConsent('PHI')}
+          disabled={loading}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
+          Approve Access
+        </button>
+        <button
+          onClick={() => handleConsent('Decline')}
+          disabled={loading}
+          className="px-4 py-2 bg-gray-300 text-gray-900 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50"
+        >
+          Decline
+        </button>
+      </div>
+      {status && <p className="text-sm mt-2 text-blue-900">{status}</p>}
+    </div>
+  )
+}
+
+// Volunteer Application Component
+const VolunteerApplication = ({ token }: { token: string }) => {
+  const [qualifications, setQualifications] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/api/protected/volunteers/apply`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qualifications })
+      })
+      if (res.ok) {
+        setSubmitted(true)
+      }
+    } catch (err) {
+      console.error('Error submitting application:', err)
+    }
+    setLoading(false)
+  }
+
+  if (submitted) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+        <CheckCircle2 className="h-8 w-8 text-green-600 mx-auto mb-2" />
+        <p className="text-green-900 font-semibold">Application Submitted!</p>
+        <p className="text-sm text-green-800 mt-1">Your application is pending admin approval.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <h3 className="font-semibold text-gray-900 mb-4">Volunteer Application</h3>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Qualifications & Experience
+          </label>
+          <textarea
+            value={qualifications}
+            onChange={(e) => setQualifications(e.target.value)}
+            placeholder="Describe your medical background, certifications, and volunteer experience..."
+            required
+            className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={loading || !qualifications.trim()}
+          className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+        >
+          {loading ? 'Submitting...' : 'Submit Application'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+// Volunteer Applications Dashboard (Admin/Doctor view)
+const VolunteerApplicationsDashboard = ({ token, logout }: { token: string, logout: () => void }) => {
+  const [applications, setApplications] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+
+  useEffect(() => {
+    fetchApplications()
+  }, [])
+
+  const fetchApplications = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/protected/volunteers/applications`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.status === 401) return logout()
+      const data = await res.json()
+      setApplications(data)
+    } catch (err) {
+      console.error('Error fetching applications:', err)
+    }
+    setLoading(false)
+  }
+
+  const handleApprove = async (appId: string) => {
+    try {
+      await fetch(`${API_URL}/api/protected/volunteers/applications/${appId}/approve`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approval_notes: 'Approved' })
+      })
+      fetchApplications()
+    } catch (err) {
+      console.error('Error approving application:', err)
+    }
+  }
+
+  const handleReject = async (appId: string) => {
+    try {
+      await fetch(`${API_URL}/api/protected/volunteers/applications/${appId}/reject`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approval_notes: 'Rejected' })
+      })
+      fetchApplications()
+    } catch (err) {
+      console.error('Error rejecting application:', err)
+    }
+  }
+
+  const filteredApplications = applications.filter(
+    (app) =>
+      app.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      app.qualifications.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  if (loading) return <div className="p-8 text-center">Loading applications...</div>
+
+  const pendingApps = filteredApplications.filter((a) => a.status === 'Pending')
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Volunteer Applications</h1>
+        <p className="text-gray-500 mt-1">Review and approve volunteer applications</p>
+      </div>
+
+      <div className="flex gap-4">
+        <input
+          type="text"
+          placeholder="Search by email or qualifications..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
+      </div>
+
+      <div className="grid gap-4">
+        {pendingApps.length > 0 ? (
+          pendingApps.map((app) => (
+            <div
+              key={app.id}
+              className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="font-semibold text-gray-900">{app.email}</h3>
+                  <p className="text-sm text-gray-500">Applied {new Date(app.created_at).toLocaleDateString()}</p>
+                </div>
+                <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm font-medium rounded-full">
+                  Pending
+                </span>
+              </div>
+              <p className="text-sm text-gray-700 mb-4 whitespace-pre-wrap">{app.qualifications}</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleApprove(app.id)}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => handleReject(app.id)}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center p-8 bg-gray-50 rounded-lg">
+            <p className="text-gray-500">No pending applications</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Event Time Slots Component
+const EventTimeSlots = ({ eventId, token }: { eventId: string, token: string }) => {
+  const [timeSlots, setTimeSlots] = useState<any[]>([])
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
+  const [capacity, setCapacity] = useState(1)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    fetchTimeSlots()
+  }, [eventId])
+
+  const fetchTimeSlots = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/protected/events/${eventId}/time-slots`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await res.json()
+      setTimeSlots(data)
+    } catch (err) {
+      console.error('Error fetching time slots:', err)
+    }
+  }
+
+  const handleAddTimeSlot = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/api/protected/events/${eventId}/time-slots`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start_time: startTime, end_time: endTime, capacity })
+      })
+      if (res.ok) {
+        setStartTime('')
+        setEndTime('')
+        setCapacity(1)
+        fetchTimeSlots()
+      }
+    } catch (err) {
+      console.error('Error adding time slot:', err)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-4">Available Time Slots</h3>
+      
+      <form onSubmit={handleAddTimeSlot} className="mb-6 p-4 bg-gray-50 rounded-lg space-y-3">
+        <div className="grid grid-cols-3 gap-3">
+          <input
+            type="datetime-local"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            required
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          />
+          <input
+            type="datetime-local"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            required
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          />
+          <select
+            value={capacity}
+            onChange={(e) => setCapacity(parseInt(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          >
+            {[1, 2, 5, 10, 20].map((n) => (
+              <option key={n} value={n}>
+                {n} slots
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+        >
+          Add Time Slot
+        </button>
+      </form>
+
+      <div className="space-y-2">
+        {timeSlots.map((slot) => (
+          <div key={slot.id} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
+            <div>
+              <p className="font-medium text-gray-900">
+                {new Date(slot.start_time).toLocaleString()} - {new Date(slot.end_time).toLocaleTimeString()}
+              </p>
+              <p className="text-sm text-gray-500">{slot.capacity} available slots</p>
+            </div>
+            <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+              {slot.status}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
