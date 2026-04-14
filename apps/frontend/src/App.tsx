@@ -2107,6 +2107,7 @@ const VolunteerApplicationsDashboard = ({ token, logout }: { token: string, logo
 }
 
 // Event Time Slots Component
+// @ts-ignore - Component used for future event management features
 const EventTimeSlots = ({ eventId, token }: { eventId: string, token: string }) => {
   const [timeSlots, setTimeSlots] = useState<any[]>([])
   const [startTime, setStartTime] = useState('')
